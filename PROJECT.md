@@ -23,26 +23,40 @@ gains are handed back.
   the tails and keep a meaningful share of the gain.
 
 ## Universe
-Tier 1 (15): NVDA, META, AVGO, AMD, MU, MRVL, TSM, ANET, VRT, ARM, ASML, AMAT, AAPL, TSLA,
-CRWV. Benchmarks: **SPY** (stored as SPX) and **SOXX** (stored as SOX). Change it by editing
-`UNIVERSE` in `empm_feed.py`.
+Tier 1 (16): NVDA, META, AVGO, AMD, MU, MRVL, TSM, ANET, VRT, ARM, ASML, AMAT, AAPL, TSLA,
+CRWV, NFLX. Benchmarks: **SPY** (stored as SPX) and **SOXX** (stored as SOX). Change it by
+editing `UNIVERSE` in `empm_feed.py`.
 
 ## The EMPM score
-Six factors, each mapped to 0–100 on its own scale, then blended by weights. Defaults
-(tunable live via the sliders in the app):
+Five factors, each mapped to 0–100 on its own scale, then blended by weights. Defaults
+(tunable live via the sliders in the app; each shows as 20% since they're weighted equally):
 
 | Factor | Weight | Notes |
 |---|---|---|
-| Relative Strength | 25% | vs SPX **and** SOX, weighted 45/55 toward SOX (sector-relative is the edge in an all-AI book); percentile-ranked across the universe |
-| Volume | 15% | RVOL, up/down volume ratio, OBV slope |
-| Trend / ADX | 15% | strength + rising-slope bonus; direction-penalized when −DI dominates |
-| MACD | 15% | histogram sign + acceleration |
-| MA Structure | 15% | price vs 20EMA/50/200 and stacking; penalized when over-extended |
-| ATR Expansion | 15% | *change* in ATR (ratio vs 90d ago + percentile), **not** raw level; blow-off cap when volatility is extreme and price extended |
+| Volume | 20% | RVOL, up/down volume ratio, OBV slope |
+| Trend / ADX | 20% | strength + rising-slope bonus; direction-penalized when −DI dominates |
+| MACD | 20% | histogram sign + acceleration |
+| MA Structure | 20% | price vs 20EMA/50/200 and stacking; penalized when over-extended |
+| ATR Expansion | 20% | *change* in ATR (ratio vs 90d ago + percentile), **not** raw level; blow-off cap when volatility is extreme and price extended |
 
 Design principle from the start: normalize each indicator to comparable scales, and don't
 double-count correlated momentum oscillators (RSI/MACD/ROC measure the same thing) — hence
 grouping and capping rather than naive summation.
+
+## Relative Strength (informational, not weighted into EMPM)
+Relative Strength used to be a sixth weighted factor: each name's excess return vs SPX/SOX,
+blended 45/55 toward SOX, then percentile-ranked across the 15-name universe. That made a
+name's RS *score* depend on how the other 14 did, not just on its own behavior — removed for
+that reason.
+
+In its place, each row shows two **RS/SPX** and **RS/SOX** readouts: the ratio of the
+stock's day-over-day RSI(14) change to the same-day RSI(14) change of the benchmark —
+e.g. if SPX's RSI moved +2 points and the stock's RSI moved +10, RS/SPX = 5.0×. This is a
+raw, per-stock number, not scaled against peers, and it does **not** feed the weighted EMPM
+total (deliberately, for now — see roadmap). When the benchmark's own RSI barely moved that
+day (|Δ| < 0.5), the ratio is suppressed to "flat bench" rather than shown, since dividing by
+a near-zero delta blows up or flips sign in a way that misrepresents relative strength; the
+ratio is otherwise capped at ±20 for the same reason.
 
 ## Why ADX and ATR are treated the way they are
 - **ADX = trend *strength*, not direction** (a speedometer, not a compass). A high ADX alone

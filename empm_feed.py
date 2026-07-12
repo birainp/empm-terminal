@@ -27,7 +27,7 @@ API_SECRET = os.environ.get("ALPACA_SECRET", "PASTE_YOUR_ALPACA_SECRET")
 
 # --- universe --------------------------------------------------------------
 UNIVERSE = ["NVDA","META","AVGO","AMD","MU","MRVL","TSM","ANET",
-            "VRT","ARM","ASML","AMAT","AAPL","TSLA","CRWV"]
+            "VRT","ARM","ASML","AMAT","AAPL","TSLA","CRWV","NFLX"]
 
 # Benchmarks: tradable ETF proxies (free IEX feed carries these).
 # Stored under SPX / SOX so the dashboard's relative-strength logic is unchanged.

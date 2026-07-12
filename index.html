@@ -250,7 +250,8 @@
         <th class="l" data-s="signal">Exit Signal</th>
         <th data-s="decay">Health</th>
         <th class="l" data-s="stage">Stage</th>
-        <th data-s="rs">RS</th>
+        <th data-s="rsSpx">RS/SPX</th>
+        <th data-s="rsSox">RS/SOX</th>
         <th data-s="vol">Vol</th>
         <th data-s="adx">ADX</th>
         <th data-s="macd">MACD</th>
@@ -404,6 +405,12 @@ function rsi(a,p=14){
 function obv(bars){let o=0;const arr=[0];for(let i=1;i<bars.length;i++){o+=bars[i].c>bars[i-1].c?bars[i].v:(bars[i].c<bars[i-1].c?-bars[i].v:0);arr.push(o);}return arr;}
 function retN(c,n){const i=c.length-1;return i-n>=0?c[i]/c[i-n]-1:0;}
 function pctileLast(arr,win){const i=arr.length-1;const start=Math.max(0,i-win+1);const v=arr[i];let below=0,tot=0;for(let j=start;j<=i;j++){if(arr[j]==null)continue;tot++;if(arr[j]<=v)below++;}return tot?below/tot:0.5;}
+function deltaLast(arr){const a=last(arr),b=at(arr,1);return(a!=null&&b!=null)?a-b:null;}
+function rsiRatio(ownDelta,benchDelta){
+  if(ownDelta==null||benchDelta==null) return null;
+  if(Math.abs(benchDelta)<0.5) return null;   // benchmark ~flat — a ratio here would blow up or flip sign misleadingly
+  return Math.max(-20,Math.min(20,ownDelta/benchDelta));
+}
 const clamp=(x,a=0,b=100)=>Math.max(a,Math.min(b,x));
 const last=a=>{for(let i=a.length-1;i>=0;i--)if(a[i]!=null)return a[i];return null;};
 const at=(a,k)=>{const i=a.length-1-k;return i>=0?a[i]:null;};
@@ -442,7 +449,7 @@ function computeFeatures(bars,bench){
 
   return {close,ma20,ma50,ma200,ext,extVs50,
     atrNow,atr30,atr90,atrExpRatio,atrPctile,
-    adxNow,adxRising,pdiNow,ndiNow,histNow,macdAccel,rsi:last(R),
+    adxNow,adxRising,pdiNow,ndiNow,histNow,macdAccel,rsi:last(R),rsiPrev:at(R,1),
     rNow,rvol,udv,obvSlope,
     series:{c,e20:e20.map(x=>x),s50:s50.map(x=>x),s200:s200.map(x=>x),vol:bars.map(b=>b.v)}};
 }
@@ -550,11 +557,10 @@ let ROWS=[];          // computed rows
 let SELECTED=null;
 let SORT={key:'empm',dir:-1};
 let HORIZON=63;
-const DEFAULT_W={rs:25,vol:15,adx:15,macd:15,ma:15,atr:15};
+const DEFAULT_W={vol:15,adx:15,macd:15,ma:15,atr:15};
 let W={...DEFAULT_W};
 
 const FACTORS=[
-  {key:'rs',name:'Relative Strength',note:'vs SPX & SOX'},
   {key:'vol',name:'Volume',note:'RVOL · up/down · OBV'},
   {key:'adx',name:'Trend (ADX)',note:'strength + slope'},
   {key:'macd',name:'MACD',note:'histogram + accel'},
@@ -629,23 +635,23 @@ function rhKey(){return HORIZON===21?'r21':HORIZON===126?'r126':'r63';}
 function buildScores(){
   const bench={spx:DATA['SPX'].map(b=>b.c),sox:DATA['SOX'].map(b=>b.c)};
   const spxR=retN(bench.spx,HORIZON), soxR=retN(bench.sox,HORIZON);
+  const spxRsiDelta=deltaLast(rsi(bench.spx,14)), soxRsiDelta=deltaLast(rsi(bench.sox,14));
   const tickers=SEEDS.map(s=>s[0]);
-  // pass 1: features + raw RS
-  const feats={};const rsRaw=[];
+  // pass 1: features + relative-strength readouts (informational — not part of the weighted EMPM total)
+  const feats={};
   tickers.forEach(tk=>{
     const f=computeFeatures(DATA[tk]);
     const own=f.rNow[rhKey()];
-    f.rsVsSpx=own-spxR; f.rsVsSox=own-soxR;
-    f.rsBlend=0.45*f.rsVsSpx+0.55*f.rsVsSox;   // sector-relative weighted heavier
-    feats[tk]=f; rsRaw.push(f.rsBlend);
+    f.rsVsSpx=own-spxR; f.rsVsSox=own-soxR;               // horizon excess return — feeds the AI Cycle Score only
+    const ownRsiDelta=(f.rsi!=null&&f.rsiPrev!=null)?f.rsi-f.rsiPrev:null;
+    f.rsiRatioSpx=rsiRatio(ownRsiDelta,spxRsiDelta);       // day-over-day RSI move vs SPX's, same day
+    f.rsiRatioSox=rsiRatio(ownRsiDelta,soxRsiDelta);       // day-over-day RSI move vs SOX's, same day
+    feats[tk]=f;
   });
-  // RS -> cross-sectional percentile across the universe
-  const sorted=[...rsRaw].sort((a,b)=>a-b);
-  const rsScore={};tickers.forEach(tk=>{const v=feats[tk].rsBlend;let below=0;sorted.forEach(x=>{if(x<=v)below++;});rsScore[tk]=clamp(below/sorted.length*100);});
 
   ROWS=tickers.map(tk=>{
     const f=feats[tk];
-    const sub={rs:rsScore[tk],vol:scoreVol(f),adx:scoreADX(f),macd:scoreMACD(f),ma:scoreMA(f),atr:scoreATRx(f)};
+    const sub={vol:scoreVol(f),adx:scoreADX(f),macd:scoreMACD(f),ma:scoreMA(f),atr:scoreATRx(f)};
     const wsum=Object.values(W).reduce((a,b)=>a+b,0)||1;
     const empm=Object.keys(sub).reduce((a,k)=>a+sub[k]*W[k],0)/wsum;
     const st=classifyStage(f); const health=scoreHealth(f); const sig=exitSignal(f,st,health);
@@ -664,7 +670,9 @@ function applySort(){
     else if(k==='signal'){av=a.health;bv=b.health;}
     else if(k==='rank'||k==='empm'){av=a.empm;bv=b.empm;}
     else if(k==='decay'){av=a.health;bv=b.health;}
-    else if(['rs','vol','adx','macd','ma','atr'].includes(k)){av=a.sub[k];bv=b.sub[k];}
+    else if(['vol','adx','macd','ma','atr'].includes(k)){av=a.sub[k];bv=b.sub[k];}
+    else if(k==='rsSpx'){av=a.f.rsiRatioSpx??-999;bv=b.f.rsiRatioSpx??-999;}
+    else if(k==='rsSox'){av=a.f.rsiRatioSox??-999;bv=b.f.rsiRatioSox??-999;}
     else {av=a.empm;bv=b.empm;}
     return d*(av-bv);
   });
@@ -726,6 +734,7 @@ function renderBoard(){
     tr.onclick=()=>select(r.ticker);
     const cell=(v,cls='')=>`<td class="${cls}">${v}</td>`;
     const sub=(k)=>{const v=r.sub[k];return `<td>${Math.round(v)}<span class="sbar"><i style="width:${v}%;background:${colorFor(v)}"></i></span></td>`;};
+    const rsCell=(v)=>v==null?`<td class="num flat">flat</td>`:`<td class="num ${v>=0?'up':'down'}">${v>=0?'+':''}${v.toFixed(1)}×</td>`;
     const action=r.sig.t.split(' — ')[0];
     tr.innerHTML=
       `<td class="l rk">${i+1}</td>`+
@@ -734,7 +743,7 @@ function renderBoard(){
       `<td class="l"><span class="sigpill" style="color:${r.sig.c};border-color:${r.sig.c}55;background:${r.sig.c}14">${r.sig.ic} ${action}</span></td>`+
       `<td style="color:${colorFor(r.health)}">${Math.round(r.health)}</td>`+
       `<td class="l"><span class="pill" style="background:${r.stage.color}">${r.stage.short}</span></td>`+
-      sub('rs')+sub('vol')+sub('adx')+sub('macd')+sub('ma')+sub('atr');
+      rsCell(r.f.rsiRatioSpx)+rsCell(r.f.rsiRatioSox)+sub('vol')+sub('adx')+sub('macd')+sub('ma')+sub('atr');
     tb.appendChild(tr);
   });
   // header arrow
@@ -819,8 +828,8 @@ function renderDrill(){
       ${met('ATR expansion','×'+fmt(f.atrExpRatio,2)+' (90d)', f.atrExpRatio>1.15?'up':'flat')}
       ${met('ATR pctile',Math.round(f.atrPctile*100)+'%', f.atrPctile>0.85?'down':'flat')}
       ${met('Ext vs 50-MA',fmtPct(f.extVs50,1), f.extVs50>0.2?'down':'up')}
-      ${met('RS vs SPX',fmtPct(f.rsVsSpx,1), f.rsVsSpx>0?'up':'down')}
-      ${met('RS vs SOX',fmtPct(f.rsVsSox,1), f.rsVsSox>0?'up':'down')}
+      ${met('RS Δ vs SPX (RSI)', f.rsiRatioSpx==null?'flat bench':fmt(f.rsiRatioSpx,1)+'×', f.rsiRatioSpx>0?'up':(f.rsiRatioSpx<0?'down':'flat'))}
+      ${met('RS Δ vs SOX (RSI)', f.rsiRatioSox==null?'flat bench':fmt(f.rsiRatioSox,1)+'×', f.rsiRatioSox>0?'up':(f.rsiRatioSox<0?'down':'flat'))}
       ${met('RVOL',fmt(f.rvol,2)+'×', f.rvol>1.2?'up':'flat')}
       ${met('Up/Down vol',fmt(f.udv,2)+'×', f.udv>1?'up':'down')}
     </div>
