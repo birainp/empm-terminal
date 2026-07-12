@@ -414,6 +414,7 @@ function rsiRatio(ownDelta,benchDelta){
 const clamp=(x,a=0,b=100)=>Math.max(a,Math.min(b,x));
 const last=a=>{for(let i=a.length-1;i>=0;i--)if(a[i]!=null)return a[i];return null;};
 const at=(a,k)=>{const i=a.length-1-k;return i>=0?a[i]:null;};
+function meanLast(arr,n){const vals=[];for(let i=arr.length-1;i>=0&&vals.length<n;i--){if(arr[i]!=null)vals.push(arr[i]);}return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null;}
 
 /* ============================================================
    FEATURE + SCORE COMPUTATION
@@ -432,6 +433,7 @@ function computeFeatures(bars,bench){
 
   const adxNow=last(D.adx), adx10=at(D.adx,10), adxRising=(adxNow!=null&&adx10!=null)?adxNow-adx10:0;
   const pdiNow=last(D.pdi), ndiNow=last(D.ndi);
+  const pdiAvg10=meanLast(D.pdi,10), ndiAvg10=meanLast(D.ndi,10);
   const histNow=last(M.hist), hist3=at(M.hist,3), macdAccel=(histNow!=null&&hist3!=null)?histNow-hist3:0;
 
   const ma20=last(e20), ma50=last(s50), ma200=last(s200);
@@ -449,7 +451,7 @@ function computeFeatures(bars,bench){
 
   return {close,ma20,ma50,ma200,ext,extVs50,
     atrNow,atr30,atr90,atrExpRatio,atrPctile,
-    adxNow,adxRising,pdiNow,ndiNow,histNow,macdAccel,rsi:last(R),rsiPrev:at(R,1),
+    adxNow,adxRising,pdiNow,ndiNow,pdiAvg10,ndiAvg10,histNow,macdAccel,rsi:last(R),rsiPrev:at(R,1),
     rNow,rvol,udv,obvSlope,
     series:{c,e20:e20.map(x=>x),s50:s50.map(x=>x),s200:s200.map(x=>x),vol:bars.map(b=>b.v)}};
 }
@@ -459,7 +461,7 @@ function scoreADX(f){
   let base;const a=f.adxNow??0;
   if(a<15)base=15;else if(a<20)base=32;else if(a<25)base=54;else if(a<40)base=70+(a-25)/15*18;else base=90-Math.min(10,(a-40)/2);
   base+=clamp(f.adxRising*3,-8,10);                       // rising-slope bonus
-  const dir=(f.pdiNow!=null&&f.ndiNow!=null)?(f.pdiNow>=f.ndiNow?1:0.45):1; // penalize strong downtrends
+  const dir=(f.pdiAvg10!=null&&f.ndiAvg10!=null)?(f.pdiAvg10>=f.ndiAvg10?1:0.45):1; // direction over the same 10d window as the rising-slope check, not just today's snapshot
   return clamp(base*dir);
 }
 function scoreMACD(f){

@@ -60,7 +60,9 @@ ratio is otherwise capped at ±20 for the same reason.
 
 ## Why ADX and ATR are treated the way they are
 - **ADX = trend *strength*, not direction** (a speedometer, not a compass). A high ADX alone
-  is not a buy — it can accompany a strong *downtrend*, so it's direction-filtered.
+  is not a buy — it can accompany a strong *downtrend*, so it's direction-filtered using the
+  10-day average of +DI vs −DI (the same window the rising-slope bonus looks over), not just
+  today's snapshot, so one noisy day can't flip which direction the score treats as dominant.
 - **ATR = volatility.** For an options book only the *transition* matters — expansion off a
   quiet base precedes the moves we want, while a very high ATR is often a blow-off top. Hence
   an **ATR Expansion Score**, not raw ATR, and a deliberately low weight.
