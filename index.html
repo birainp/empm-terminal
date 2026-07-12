@@ -162,6 +162,9 @@
   .exitbox .ico{font-family:var(--mono);font-size:16px}
   .exitbox .txt .t{font-family:var(--mono);font-weight:600;font-size:13px;letter-spacing:.3px}
   .exitbox .txt .s{font-size:11px;color:var(--muted);margin-top:2px}
+  .whybox{margin-bottom:18px}
+  .whybox p{font-size:12px;line-height:1.55;color:var(--muted);margin:0 0 9px}
+  .whybox p:last-child{margin-bottom:0}
   .metrics{display:grid;grid-template-columns:1fr 1fr;gap:9px 16px;margin:16px 0}
   .metric{display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line)}
   .metric .k{font-size:11px;color:var(--muted)}
@@ -522,22 +525,44 @@ function classifyStage(f){
   const a=f.adxNow??0, ext=f.extVs50, rising=f.adxRising>0;
   const atrHot=f.atrPctile>0.85, atrExp=f.atrExpRatio>1.15;
   const decel=f.macdAccel<0, histPos=f.histNow>0;
-  const sc=[0,0,0,0,0,0];
-  // 1 accumulation
-  sc[0]=(!above50?1.4:0)+(a<20?1.2:0)+(!atrExp&&f.atrExpRatio<1.02?0.8:0)+(f.rNow.r63>-0.05&&f.rNow.r63<0.08?0.7:0)+(above200?0.3:0);
-  // 2 breakout
-  sc[1]=(above50&&ext<0.10?1.2:0)+(atrExp?1.2:0)+(rising&&a>18&&a<30?1.1:0)+(f.rvol>1.1?0.8:0)+(f.udv>1.1?0.6:0);
-  // 3 markup
-  sc[2]=(stacked?1.6:0)+(a>=25&&a<=40?1.2:0)+(rising?0.6:0)+(ext>0.02&&ext<0.14?0.9:0)+(histPos?0.5:0);
-  // 4 acceleration
-  sc[3]=(ext>0.12?1.4:0)+(a>34?1.1:0)+(atrExp?1.0:0)+(f.rNow.r21>0.10?1.0:0)+(stacked?0.5:0);
-  // 5 climax
-  sc[4]=(ext>0.22?1.8:0)+(atrHot?1.3:0)+(decel&&histPos?1.2:0)+(f.rsi>72?1.0:0)+(f.rNow.r21>0.18?0.6:0);
-  // 6 distribution
-  sc[5]=(!above50?1.5:0)+(f.adxRising<0&&a>22?1.1:0)+(f.udv<0.9?1.0:0)+(f.rNow.r63<0?1.2:0)+(f.close<f.ma20?0.8:0);
+  // Criteria per stage, kept identical in math to the original inline sc[i] sums —
+  // structured so the "why" narrative can name which specific criteria fired.
+  const CRIT=[
+    [ {label:'below the 50-MA',hit:!above50,pts:1.4},
+      {label:'ADX under 20 (no real trend yet)',hit:a<20,pts:1.2},
+      {label:'ATR flat or contracting',hit:!atrExp&&f.atrExpRatio<1.02,pts:0.8},
+      {label:'63d return in a quiet band (−5% to +8%)',hit:f.rNow.r63>-0.05&&f.rNow.r63<0.08,pts:0.7},
+      {label:'above the 200-MA',hit:above200,pts:0.3} ],
+    [ {label:'tight to the 50-MA (under 10% extension)',hit:above50&&ext<0.10,pts:1.2},
+      {label:'ATR expanding (ratio > 1.15)',hit:atrExp,pts:1.2},
+      {label:'ADX rising through the 18–30 band',hit:rising&&a>18&&a<30,pts:1.1},
+      {label:'RVOL above 1.1×',hit:f.rvol>1.1,pts:0.8},
+      {label:'up/down volume above 1.1×',hit:f.udv>1.1,pts:0.6} ],
+    [ {label:'MAs stacked (20 > 50 > 200)',hit:stacked,pts:1.6},
+      {label:'ADX in the 25–40 band',hit:a>=25&&a<=40,pts:1.2},
+      {label:'ADX rising',hit:rising,pts:0.6},
+      {label:'extension 2%–14% vs the 50-MA',hit:ext>0.02&&ext<0.14,pts:0.9},
+      {label:'MACD histogram positive',hit:histPos,pts:0.5} ],
+    [ {label:'extension over 12% vs the 50-MA',hit:ext>0.12,pts:1.4},
+      {label:'ADX above 34',hit:a>34,pts:1.1},
+      {label:'ATR expanding (ratio > 1.15)',hit:atrExp,pts:1.0},
+      {label:'21d return above 10%',hit:f.rNow.r21>0.10,pts:1.0},
+      {label:'MAs stacked',hit:stacked,pts:0.5} ],
+    [ {label:'extension over 22% vs the 50-MA',hit:ext>0.22,pts:1.8},
+      {label:'ATR percentile above 85% (1yr)',hit:atrHot,pts:1.3},
+      {label:'MACD decelerating while still positive',hit:decel&&histPos,pts:1.2},
+      {label:'RSI above 72',hit:f.rsi>72,pts:1.0},
+      {label:'21d return above 18%',hit:f.rNow.r21>0.18,pts:0.6} ],
+    [ {label:'below the 50-MA',hit:!above50,pts:1.5},
+      {label:'ADX falling while still above 22',hit:f.adxRising<0&&a>22,pts:1.1},
+      {label:'up/down volume under 0.9×',hit:f.udv<0.9,pts:1.0},
+      {label:'63d return negative',hit:f.rNow.r63<0,pts:1.2},
+      {label:'closed below the 20-EMA',hit:f.close<f.ma20,pts:0.8} ]
+  ];
+  const sc=CRIT.map(list=>list.reduce((s,c)=>s+(c.hit?c.pts:0),0));
   let bi=0;for(let i=1;i<6;i++)if(sc[i]>sc[bi])bi=i;
   const total=sc.reduce((x,y)=>x+y,0)||1;
-  return {stage:STAGES[bi],conf:Math.round(sc[bi]/total*100)};
+  return {stage:STAGES[bi],conf:Math.round(sc[bi]/total*100),scores:sc,criteria:CRIT,winnerIdx:bi};
 }
 
 /* --- exit signal from stage + health + structure --- */
@@ -657,7 +682,7 @@ function buildScores(){
     const wsum=Object.values(W).reduce((a,b)=>a+b,0)||1;
     const empm=Object.keys(sub).reduce((a,k)=>a+sub[k]*W[k],0)/wsum;
     const st=classifyStage(f); const health=scoreHealth(f); const sig=exitSignal(f,st,health);
-    return {ticker:tk,f,sub,empm,stage:st.stage,stageConf:st.conf,health,sig,
+    return {ticker:tk,f,sub,empm,stage:st.stage,stageConf:st.conf,stageAll:st,health,sig,
             chg:f.rNow.r21};
   });
   applySort();
@@ -688,6 +713,63 @@ function colorFor(v){ // 0-100 -> red..gold..green
 }
 function fmt(n,d=1){return n==null||isNaN(n)?'—':Number(n).toFixed(d);}
 function fmtPct(n,d=1){return n==null||isNaN(n)?'—':(n>=0?'+':'')+ (n*100).toFixed(d)+'%';}
+function fmtSigned(n,d=1,suffix=''){return n==null||isNaN(n)?'—':(n>=0?'+':'')+n.toFixed(d)+suffix;}
+
+/* ---- auto "why" narrative — deterministic, templated from the same figures shown elsewhere ---- */
+function explainEmpmText(r){
+  const f=r.f;
+  const entries=FACTORS.map(fac=>({name:fac.name,val:r.sub[fac.key]}));
+  entries.sort((a,b)=>b.val-a.val);
+  const top=entries.slice(0,2), bottom=entries[entries.length-1];
+  let s=`EMPM is ${r.empm.toFixed(1)} — driven mainly by ${top.map(e=>`${e.name} (${Math.round(e.val)})`).join(' and ')}; the weakest link is ${bottom.name} (${Math.round(bottom.val)}).`;
+  const rsBits=[];
+  if(f.rsiRatioSpx!=null&&Math.abs(f.rsiRatioSpx)>=2) rsBits.push(`RS/SPX ${fmtSigned(f.rsiRatioSpx,1)}×`);
+  if(f.rsiRatioSox!=null&&Math.abs(f.rsiRatioSox)>=2) rsBits.push(`RS/SOX ${fmtSigned(f.rsiRatioSox,1)}×`);
+  if(rsBits.length) s+=` Notably strong day-over-day relative strength: ${rsBits.join(', ')} (informational — not weighted into EMPM).`;
+  return s;
+}
+function explainHealthText(f,health,sig){
+  const checks=[
+    {name:'ADX rising',tier:f.adxRising>0?'pass':(f.adxRising>-1?'mid':'fail'),val:'adxRising '+fmtSigned(f.adxRising,1)},
+    {name:'MACD accelerating',tier:f.macdAccel>0?'pass':(f.histNow>0?'mid':'fail'),val:'accel '+fmtSigned(f.macdAccel,2)+', hist '+fmtSigned(f.histNow,2)},
+    {name:'RSI level',tier:f.rsi>55?'pass':(f.rsi>48?'mid':'fail'),val:'RSI '+fmt(f.rsi,1)},
+    {name:'Volume confirming',tier:(f.udv>1&&f.rvol>0.8)?'pass':(f.udv>0.85?'mid':'fail'),val:'udv '+fmt(f.udv,2)+'×, RVOL '+fmt(f.rvol,2)+'×'},
+    {name:'Not overextended (vs 20-EMA)',tier:f.ext<0.10?'pass':(f.ext<0.18?'mid':'fail'),val:'ext '+fmtSigned(f.ext*100,1,'%')}
+  ];
+  const grp=t=>checks.filter(c=>c.tier===t).map(c=>`${c.name} (${c.val})`);
+  const pass=grp('pass'),mid=grp('mid'),fail=grp('fail');
+  let s=`Health is ${Math.round(health)}/100.`;
+  if(pass.length) s+=` Passing: ${pass.join('; ')}.`;
+  if(mid.length) s+=` Middling: ${mid.join('; ')}.`;
+  if(fail.length) s+=` Failing: ${fail.join('; ')}.`;
+  s+=` Current read: ${sig.t} — ${sig.s}`;
+  return s;
+}
+function explainStageText(stageAll){
+  const order=[0,1,2,3,4,5].sort((a,b)=>stageAll.scores[b]-stageAll.scores[a]);
+  const bi=order[0];
+  const winnerCrit=stageAll.criteria[bi].filter(c=>c.hit).map(c=>c.label);
+  let s=`Stage is ${STAGES[bi].name} (${stageAll.conf}% confidence), driven by: ${winnerCrit.length?winnerCrit.join('; '):'no single criterion dominates'}.`;
+  const ord=['second','third'];
+  for(let k=1;k<3;k++){
+    const idx=order[k];
+    const gap=stageAll.scores[bi]-stageAll.scores[idx];
+    if(stageAll.scores[idx]>0&&gap<=0.6){
+      const crit=stageAll.criteria[idx].filter(c=>c.hit).map(c=>c.label);
+      s+=` ${STAGES[idx].name} is a close ${ord[k-1]} (${stageAll.scores[idx].toFixed(1)} vs ${stageAll.scores[bi].toFixed(1)}), on: ${crit.length?crit.join('; '):'—'}.`;
+    } else break;
+  }
+  s+=` (Confidence is that stage's share of all six scores, not a probability — 25–45% is normal even on a clean read.)`;
+  return s;
+}
+function explainFlagsText(f){
+  const flags=[];
+  if(f.atrPctile>0.9&&f.extVs50>0.18) flags.push('ATR Expansion is capped by the blow-off guard — volatility is at a 1-year extreme while price is very extended above the 50-MA, read as late-cycle exhaustion risk rather than confirmation.');
+  return flags;
+}
+function explainRow(r){
+  return [explainEmpmText(r), explainHealthText(r.f,r.health,r.sig), explainStageText(r.stageAll)].concat(explainFlagsText(r.f));
+}
 
 function renderTop(){
   document.getElementById('uCount').textContent=ROWS.length;
@@ -811,6 +893,10 @@ function renderDrill(){
       <span class="ico" style="color:${r.sig.c}">${r.sig.ic}</span>
       <div class="txt"><div class="t" style="color:${r.sig.c}">${r.sig.t}</div><div class="s">${r.sig.s}</div></div>
     </div>
+
+    <div class="section-h"><h2>Why</h2><div class="rule"></div>
+      <span class="badge" style="border-color:var(--gold-dim);color:var(--gold)">auto-generated, not AI</span></div>
+    <div class="whybox">${explainRow(r).map(p=>`<p>${p}</p>`).join('')}</div>
 
     <div class="section-h"><h2>Score Breakdown</h2><div class="rule"></div></div>
     <div class="subs">${FACTORS.map(subRow).join('')}</div>

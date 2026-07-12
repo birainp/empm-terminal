@@ -3,7 +3,7 @@
    - empm_data.js: network-first, so a freshly-fetched feed always shows when online,
      while the last-known data still loads offline.
    Bump CACHE to force clients to pick up a new shell after you change index.html. */
-const CACHE = 'empm-v4';
+const CACHE = 'empm-v5';
 const SHELL = [
   './',
   './index.html',
