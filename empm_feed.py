@@ -35,7 +35,7 @@ BENCH = {"SPY": "SPX", "SOXX": "SOX"}     # S&P 500 proxy, semis proxy
 
 LOOKBACK_DAYS = 420          # calendar days -> ~280 trading bars (need 200 for SMA200)
 FEED          = "iex"        # free feed; use "sip" only if you pay for it
-DATA_HOST     = "https://data.alpaca.markets"
+DATA_HOST     = "https://data.sandbox.alpaca.markets"
 OUT_FILE      = os.path.join(os.path.dirname(os.path.abspath(__file__)), "empm_data.js")
 
 
