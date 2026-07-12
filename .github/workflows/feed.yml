@@ -22,6 +22,14 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Check secrets
+        env:
+          K: ${{ secrets.ALPACA_KEY_ID }}
+          S: ${{ secrets.ALPACA_SECRET }}
+        run: |
+          echo "Key ID length: ${#K}"
+          echo "Secret length: ${#S}"
+
       - name: Fetch daily bars
         env:
           ALPACA_KEY_ID: ${{ secrets.ALPACA_KEY_ID }}
